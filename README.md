@@ -1,4 +1,4 @@
-# LEDD Scripts
+# LEDD Tools
 
 ## ledd calculator instructions:
 

@@ -4,24 +4,227 @@ format: html
 editor: visual
 ---
 
-##### 1. Export the instrument "PD Medications - LED Calculation" from Z1XADRCNACC Database as a CSV file (raw labels)
-
-##### 2. save that CSV to your Desktop (or wherever), then copy + paste the name of the file below
-
 ### Imports and path read in
-
-Please edit the paths.yaml file with your desired input and output paths.
 
 ```{r}
 library(tidyverse)
 library(yaml)
 
-#read in paths from your configuration file
+# read in paths from your configuration file and read in input file
 paths <- read_yaml("paths.yaml")
+
+tryCatch({
+  df <- read_csv(paths$calculator_input_file)
+}, error = function(e) {
+  stop(paste("failed to read input csv. please correct file path."))
+})
 ```
 
+### Ledd calculation
+
 ```{r}
-calculate_levodopa <- function(row){
-  row <- 
+get_float <- function(string) {
+  val <- suppressWarnings(as.numeric(as.character(string)))
+  if (is.na(val)) {
+    return(0)
+  }
+  return(val)
 }
+
+calculate_levodopa <- function(row) {
+    total_levodopa <- 0
+    
+    # all medicine codes associated with levodopa calculation
+    levodopa_calc_colums <- c(101, 102, 103, 115, 116, 117)
+    
+    # corresponding multiplication constants for these medications
+    levodopa_constants <- list(
+        "101" = 100,
+        "102" = 100,
+        "103" = 250,
+        "115" = 100,
+        "116" = 100,
+        "117" = 250
+    )
+    
+    # loop over all 10 possible medicine entries
+    if ('park_med_tot' %in% names(row) && !is.na(row$park_med_tot) && row$park_med_tot > 0) {
+        for (med_number in 0:9) {
+            med_name_col <- if (med_number == 0) 'park_med_name' else paste0('park_med_name_', med_number + 1)
+            
+            med_code <- as.character(row[[med_name_col]])
+            
+            # if the med selection (medicine code) is relevant to levodopa calculation, use it (101, 102, 103, 115, 116, or 117)
+            if (!is.na(med_code) && med_code %in% as.character(levodopa_calc_colums)) {
+                if (med_number == 0) {
+                    park_med_dose <- row[['park_med_dose']]
+                    park_med_time <- row[['park_med_time']]
+                    constant <- levodopa_constants[[med_code]]
+                } else {
+                    dose_col <- paste0('park_med_dose_', med_number + 1)
+                    time_col <- paste0('park_med_time_', med_number + 1)
+                    park_med_dose <- row[[dose_col]]
+                    park_med_time <- row[[time_col]]
+                    constant <- levodopa_constants[[med_code]]
+                }
+                total_levodopa <- total_levodopa + (get_float(park_med_dose) * get_float(park_med_time) * get_float(constant))
+            }
+        }
+    }
+    return(total_levodopa)
+}
+
+calculate_pre_ledd <- function(row) {
+    total_pre_ledd <- 0
+    
+    # get constants associated with the rest of the PD medications, except for COMT inhibitors (140, 141, 142)
+    med_name_constants <- list(
+        "110" = 100*0.75, "111" = 200*0.75, "121" = 95*0.5, "122" = 145*0.5, "123" = 195*0.5,
+        "124" = 245*0.5, "131" = 50*1.33, "132" = 75*1.33, "133" = 100*1.33, "134" = 125*1.33,
+        "135" = 150*1.33, "136" = 200*1.33, "150" = 0.125*100, "151" = 0.25*100, "152" = 0.5*100,
+        "153" = 0.75*100, "154" = 1*100, "155" = 1.5*100, "170" = 0.375*100, "171" = 0.75*100,
+        "172" = 1.5*100, "173" = 2.25*100, "174" = 3*100, "175" = 3.75*100, "176" = 4.5*100,
+        "201" = 0.25*20, "202" = 0.5*20, "203" = 1*20, "204" = 2*20, "205" = 3*20, "206" = 4*20,
+        "207" = 5*20, "221" = 2*20, "222" = 4*20, "223" = 6*20, "224" = 8*20, "225" = 12*20,
+        "240" = 1*30.3, "241" = 2*30.3, "242" = 3*30.3, "243" = 4*30.3, "244" = 6*30.3,
+        "245" = 8*30.3, "260" = 5*10, "265" = 1.25*80, "280" = 0.5*100, "281" = 1*100,
+        "290" = 100*1, "301" = 100, "302" = 100, "400" = 68.5*1.25, "401" = 137*1.25,
+        "500" = 150, "501" = 150, "600" = 0.69, "800" = 100
+    )
+    
+    if ('park_med_tot' %in% names(row) && !is.na(row$park_med_tot) && row$park_med_tot > 0) {
+        for (med_number in 0:9) {
+          
+            # correct for misnomer of medicine name 0
+            med_name_col <- if (med_number == 0) 'park_med_name' else paste0('park_med_name_', med_number + 1)
+            med_code <- as.character(row[[med_name_col]])
+            
+            # if medicine code is 301, 302, 500, 501, or 800, set pre-ledd equal to 150 and break out of for loop
+            if (!is.na(med_code) && med_code %in% names(med_name_constants)) {
+                if (med_code %in% c("301", "302", "500", "501", "800")) {
+                    total_pre_ledd <- med_name_constants[[med_code]]
+                    break
+                }
+                
+                # correct for misnomer of medicine name 0
+                if (med_number == 0) {
+                    park_med_dose <- row[['park_med_dose']]
+                    park_med_time <- row[['park_med_time']]
+                    constant <- med_name_constants[[med_code]]
+                } else {
+                    dose_col <- paste0('park_med_dose_', med_number + 1)
+                    time_col <- paste0('park_med_time_', med_number + 1)
+                    park_med_dose <- row[[dose_col]]
+                    park_med_time <- row[[time_col]]
+                    constant <- med_name_constants[[med_code]]
+                }
+              
+                # add [constant] * [dose] * [times a day] to overall levodopa calculation and overall total pre-ledd calculation
+                total_pre_ledd <- total_pre_ledd + (get_float(park_med_dose) * get_float(park_med_time) * get_float(constant))
+            }
+        }
+    }
+    return(total_pre_ledd)
+}
+
+calculate_comt <- function(row) {
+    # initially set total comt value equal to levodopa
+    total_comt <- calculate_levodopa(row)
+    levadopa_multiplier <- 1
+    
+    # get levodopa multipliers for relevant comt inhibitors (140, 141, 142)
+    comt_dict <- list(
+        "140" = 1.33,
+        "141" = 1.5,
+        "142" = 1.5,
+        "700" = 1.2
+    )
+    
+    if ('park_med_tot' %in% names(row) && !is.na(row$park_med_tot) && row$park_med_tot > 0) {
+        for (med_number in 0:9) {
+            med_name_col <- if (med_number == 0) 'park_med_name' else paste0('park_med_name_', med_number + 1)
+            med_code <- as.character(row[[med_name_col]])
+            
+            # if medicine code is 140, 141, or 142 multiply levodopa by the comt constant
+            if (!is.na(med_code) && med_code %in% names(comt_dict)) {
+                levadopa_multiplier <- comt_dict[[med_code]]
+            }
+        }
+    }
+    return(total_comt * levadopa_multiplier)
+}
+
+# total ledd is equal to the calculated comt + calculated pre-ledd
+calculate_total_ledd <- function(row) {
+    comt <- calculate_comt(row)
+    pre_ledd_calc <- calculate_pre_ledd(row)
+    return(comt + pre_ledd_calc)
+}
+
+# initialize columns with NA
+df$levodopa <- NA_real_
+df$pre_ledd_calc <- NA_real_
+df$comt <- NA_real_
+df$total_ledd_calc <- as.character(NA_real_)
+
+# make the calculations for every row in the csv file
+for (index in 1:nrow(df)) {
+    row <- df[index, ]
+    df[index, 'levodopa'] <- calculate_levodopa(row)
+    df[index, 'pre_ledd_calc'] <- calculate_pre_ledd(row)
+    df[index, 'comt'] <- calculate_comt(row)
+    df[index, 'total_ledd_calc'] <- as.character(calculate_total_ledd(row))
+}
+
+# flag participants with invalid entries or special statuses
+for (index in 1:nrow(df)) {
+    row <- df[index, ]
+    
+    if (!is.na(row$park_med_admin_st) && row$park_med_admin_st > 1) {
+        df[index, 'levodopa'] <- NA
+        df[index, 'pre_ledd_calc'] <- NA
+        df[index, 'comt'] <- NA
+        df[index, 'total_ledd_calc'] <- 'invalid administration'
+    }
+    
+    if (is.na(row$park_med_admin_st) && is.na(row$park_med_tot)) {
+        df[index, 'levodopa'] <- NA
+        df[index, 'pre_ledd_calc'] <- NA
+        df[index, 'comt'] <- NA
+        df[index, 'total_ledd_calc'] <- NA
+    }
+    
+    if (!is.na(row$park_med_admin_st) && row$park_med_admin_st == 1 && !is.na(row$park_med_tot) && row$park_med_tot == 0) {
+        df[index, 'total_ledd_calc'] <- 'participant not taking pd meds'
+    }
+}
+
+for (index in 1:nrow(df)) {
+    row <- df[index, ]
+    
+    if ('park_med_tot' %in% names(row) && !is.na(row$park_med_tot) && row$park_med_tot > 0) {
+        for (med_number in 0:9) {
+            med_name_col <- if (med_number == 0) 'park_med_name' else paste0('park_med_name_', med_number + 1)
+            
+            if (med_name_col %in% names(row) && !is.na(row[[med_name_col]]) && row[[med_name_col]] == 999) {
+                df[index, 'levodopa'] <- NA
+                df[index, 'pre_ledd_calc'] <- NA
+                df[index, 'comt'] <- NA
+                df[index, 'total_ledd_calc'] <- 'participant taking pd meds without published led conversion'
+                break
+            }
+        }
+    }
+}
+
+```
+
+### Export results
+
+```{r}
+# use the output file path from config yaml and write to csv
+write_csv(df, paths$calculator_output_file)
+
+print(paste("ledd output saved to:", paths$calculator_output_file))
+
 ```

@@ -9,12 +9,24 @@ imports and data read-in
 
 ```{r}
 library(tidyverse)
+library(yaml)
 
-#read in LEDD data
-ledd_df <- read.csv("Z1XADRCNACC_LEDD.csv")
 
-#read in subj list of interest
-subj_df <- read.csv("adrcIDs_forClinVar_pull.csv")
+# read in paths from your configuration file and read in input file
+paths <- read_yaml("paths.yaml")
+
+tryCatch({
+  ledd_df <- read_csv(paths$calculator_output_file)
+}, error = function(e) {
+  stop(paste("failed to read input csv. please correct file path."))
+})
+
+tryCatch({
+  subj_df <- read_csv(paths$subj_list)
+}, error = function(e) {
+  stop(paste("failed to read input csv. please correct file path."))
+})
+
 ```
 
 remove NA from "park_med_ptid", "park_med_admin_date", "total_ledd_calc"
@@ -111,6 +123,8 @@ str(merged_ledd_subj)
 optional final export, ledd_df with only subj of interest (NA dropped)
 
 ```{r}
-#write.csv(merged_ledd_subj, "merged_ledd_subj.csv", row.names = FALSE)
+# use the output file path from config yaml and write to csv
+write_csv(df, paths$cleaner_output_file)
 
+print(paste("cleaned ledd output saved to:", paths$cleaner_output_file))
 ```

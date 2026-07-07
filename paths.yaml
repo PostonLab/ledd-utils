@@ -1,2 +1,4 @@
-input_file: "/Users/kjung6/Marian/input/Z1XADRCNACC-PDMedicationsLEDCalc_DATA_2026-07-02_1122.csv"
-output_file: "/Users/kjung6/Marian/output/ledd_calc.csv"
+calculator_input_file: "/input_path/your_NACC_pdmeds_export.csv"
+calculator_output_file: "/output_path/ledd_calc.csv"
+subj_list: "/input_path/your_subject_list.csv"
+cleaner_output_file: "/output_path/merged_ledd_subj.csv"

@@ -5,7 +5,7 @@
 ---
 ### ledd calculator 
 Calculates ledd using `PD Medications - LED Calculation` instrument export from the Z1XADRCNACC Database.
-### Instructions:
+#### Instructions:
 
 1.  Export the instrument `PD Medications - LED Calculation` from Z1XADRCNACC Database as a CSV file (raw labels).
 2.  Update paths.yaml file with your desired calculator input (location of your saved PD Medications export) and calculator output (calculated ledd data) file paths.
@@ -13,7 +13,7 @@ Calculates ledd using `PD Medications - LED Calculation` instrument export from 
 ---
 ### ledd cleaner
 Subsets and cleans ledd output from ledd calculator based on your subject list.
-### Instructions:
+#### Instructions:
 
 1.  Use ledd calculator and obtain output ledd data.
 2.  Update paths.yaml with your cleaner output file path.
